@@ -14,5 +14,9 @@ HyperG-VAE excels in GRN inference and scRNA-seq visualization, confirmed by ben
 * Different environment setting may make very subtle difference
 
 ## More code
-* EPR and AUPRC calculation tutorial could be found in ["DeepSEM"]([https://github.com/HantaoShu/DeepSEM/tree/master/tutorial])
+* EPR and AUPRC calculation tutorial could be found in ["DeepSEM"](https://github.com/HantaoShu/DeepSEM/tree/master/tutorial)
+* SCENIC tutorial could be found in ["SCENIC"](https://github.com/aertslab/pySCENIC)
+* GSEA analysis tool could be found ["here"](https://metascape.org/gp/index.html#/main/step1)
+* Chip-Atlas dataset could be found ["here"](https://chip-atlas.org/target_genes)
+* scRNA-seq data with clustering label annotation preprocess tutorial could be found ["here"](https://github.com/hemberg-lab/scRNA.seq.datasets)
 
