@@ -7,9 +7,9 @@ import torch
 import numpy as np
 parser = argparse.ArgumentParser()
 #添加random seed
-parser.add_argument('--n_epochs', type=int, default=1, help='Number of Epochs for training DeepSEM')
+parser.add_argument('--n_epochs', type=int, default=1, help='Number of Epochs for training')
 parser.add_argument('--task', type=str, default='celltype_GRN',
-                    help='Determine which task to run. Select from (non_celltype_GRN,celltype_GRN,embedding,simulation)')
+                    help='Determine which task to run. Select from (non_celltype_GRN,celltype_GRN,)')
 parser.add_argument('--setting', type=str, default='nondefault', help='Determine whether or not to use the default hyper-parameter')
 parser.add_argument('--batch_size', type=int, default=64, help='The batch size used in the training process.')
 
