@@ -13,6 +13,19 @@ HyperG-VAE excels in GRN inference and scRNA-seq visualization, confirmed by ben
 * CUDA 11.6
 * Different environment setting may make very subtle difference
 
+## Usage
+Command to run HyperG-VAE 
+- Gene Regulation Inference (including cell type specific GRN and cell type non-specific GRN). 
+	```sh
+     python mainspec.py --task celltype_GRN --data_file <scGNA-seq path> --save_name <output path> --setting test
+	 python main.py --task non_celltype_GRN --data_file <scGNA-seq path> --save_name <output path> --setting test
+	 ```
+     use --setting test to infer GRN instead of benchmarking.
+- Embedding  
+	```sh
+     python mainumap.py --task non_celltype_GRN --data_file <scGNA-seq path> --save_name <output path>
+	 ```
+
 ## Supporting tools
 * The basic setting and datasets used in the scRNA-seq GRN inference benchmark part could be found in ["BEELINE"](https://github.com/murali-group/BEELINE).
 * EPR and AUPRC calculation tutorial could be found in ["DeepSEM"](https://github.com/HantaoShu/DeepSEM/tree/master/tutorial).
