@@ -13,7 +13,7 @@ HyperG-VAE excels in GRN inference and scRNA-seq visualization, confirmed by ben
 * CUDA 11.6
 * Different environment setting may make very subtle difference
 
-## More code
+## Supporting tools
 * The basic setting and datasets used in the scRNA-seq GRN inference benchmark part could be found in ["BEELINE"](https://github.com/murali-group/BEELINE).
 * EPR and AUPRC calculation tutorial could be found in ["DeepSEM"](https://github.com/HantaoShu/DeepSEM/tree/master/tutorial).
 * SCENIC tutorial could be found in ["SCENIC"](https://github.com/aertslab/pySCENIC).
