@@ -1,5 +1,5 @@
 # HyperG-VAE
-Code for the paper named ["Inferring gene regulatory networks by hypergraph variational autoencoder"](https://github.com/guangxinsuuu/HyperG-VAE). 
+Code for the paper named ["Inferring gene regulatory networks by hypergraph variational autoencoder"](https://www.biorxiv.org/content/10.1101/2024.04.01.586509v1). 
 
 ## Abstract
 In constructing Gene Regulatory Networks (GRN), it is vital to account for
