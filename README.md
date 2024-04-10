@@ -37,11 +37,14 @@ Command to run HyperG-VAE
      python mainumap.py --task non_celltype_GRN --data_file <scGNA-seq path> --save_name <output path>
 	 ```
 
+Hyperparameters tuned in the paper can be found in the Supplementary.
+
 ## Supporting tools
 * The basic setting and datasets used in the scRNA-seq GRN inference benchmark part could be found in ["BEELINE"](https://github.com/murali-group/BEELINE).
 * EPR and AUPRC calculation tutorial could be found in ["DeepSEM"](https://github.com/HantaoShu/DeepSEM/tree/master/tutorial).
-* SCENIC tutorial could be found in ["SCENIC"](https://github.com/aertslab/pySCENIC).
-* GSEA analysis tool could be found ["here"](https://metascape.org/gp/index.html#/main/step1).
-* Chip-Atlas dataset could be found ["here"](https://chip-atlas.org/target_genes).
-* scRNA-seq data with clustering label annotation preprocess tutorial could be found ["here"](https://github.com/hemberg-lab/scRNA.seq.datasets).
+* SCENIC tutorial can be found in ["SCENIC"](https://github.com/aertslab/pySCENIC).
+* GSEA analysis tool can be found ["here"](https://metascape.org/gp/index.html#/main/step1).
+* Chip-Atlas dataset can be found ["here"](https://chip-atlas.org/target_genes).
+* scRNA-seq data with clustering label annotation preprocess tutorial can be found ["here"](https://github.com/hemberg-lab/scRNA.seq.datasets).
+* GRN networks are drawn by Cytoscape.
 
