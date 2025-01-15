@@ -1,206 +1,174 @@
+# Import required libraries
 import os
 import numpy as np
 import pandas as pd
-import scanpy as sc
+import scanpy as sc  # For single-cell RNA sequencing data processing
 import torch
-import torch.optim as optim
-from torch.autograd import Variable
-from torch.utils.data import DataLoader
-from torch.utils.data.dataset import TensorDataset
-from src.Model import VAE_EAD
-from src.utils import evaluate, extractEdgesFromMatrix
-from scipy.sparse import csc_matrix
-from src.utils import normalize_sparse_hypergraph_symmetric
-import codecs
-import csv
-import time
-import psutil
+import torch.optim as optim  # Optimizers for training
+from torch.autograd import Variable  # For handling tensor operations
+from torch.utils.data import DataLoader, TensorDataset  # For batch data handling
+from src.Model import VAE_EAD  # Import the Variational Autoencoder with Edge Attention Decoder
+from src.utils import evaluate, extractEdgesFromMatrix  # Utility functions for evaluation and edge extraction
+from scipy.sparse import csc_matrix  # For sparse matrix representation
+from src.utils import normalize_sparse_hypergraph_symmetric  # For hypergraph normalization
+import codecs  # For handling CSV encoding
+import csv  # For CSV operations
+import time  # For tracking runtime
+import psutil  # For monitoring system performance
+
+# Specify tensor type for GPU
 Tensor = torch.cuda.FloatTensor
 
-def data_write_csv(file_name, datas):  # file_name为写入CSV文件的路径，datas为要写入数据列表
-    file_csv = codecs.open(file_name, 'w+', 'utf-8')  # 追加
+# Utility function to write data to a CSV file
+def data_write_csv(file_name, datas):
+    """
+    Save data to a CSV file.
+    Args:
+        file_name (str): Path to the CSV file.
+        datas (list): Data to be saved.
+    """
+    file_csv = codecs.open(file_name, 'w+', 'utf-8')  # Open the file in write mode
     writer = csv.writer(file_csv, delimiter=' ', quotechar=' ', quoting=csv.QUOTE_MINIMAL)
     for data in datas:
-        writer.writerow(data)
+        writer.writerow(data)  # Write each row to the file
     print("Save Successfully")
 
+# Define the model class for non-cell-type-specific GRN inference
 class non_celltype_GRN_model:
     def __init__(self, opt):
+        """
+        Initialize the GRN model with the provided options.
+        Args:
+            opt: Configuration options for the model.
+        """
         self.opt = opt
         try:
-            os.mkdir(opt.dataset_name)
+            os.mkdir(opt.dataset_name)  # Create a directory for dataset-specific outputs
         except:
-            print('dir exist')
+            print('Directory already exists')
 
+    # Initialize the adjacency matrix A with random values
     def initalize_A(self, data):
-        num_genes = data.shape[1]
-        A = np.ones([num_genes, num_genes]) / (num_genes - 1) + (np.random.rand(num_genes * num_genes) * 0.0002).reshape(
-            [num_genes, num_genes])
-        for i in range(len(A)):
-            A[i, i] = 0
+        """
+        Initialize the adjacency matrix with small random values and no self-loops.
+        Args:
+            data: Input gene expression data.
+        Returns:
+            A: Initialized adjacency matrix.
+        """
+        num_genes = data.shape[1]  # Number of genes
+        A = np.ones([num_genes, num_genes]) / (num_genes - 1) + \
+            (np.random.rand(num_genes * num_genes) * 0.0002).reshape([num_genes, num_genes])
+        np.fill_diagonal(A, 0)  # Set diagonal elements to 0 (no self-loops)
         return A
-    
- 
-    # Doesnt work
-    # def xavier_init_with_zero_diag(self, n_in, n_out):
-    #     """
-    #     Xavier初始化方法，并将对角线元素设置为0。
-        
-    #     参数：
-    #     - n_in: int，输入特征数量
-    #     - n_out: int，输出特征数量
-        
-    #     返回：
-    #     - W: numpy array，初始化后的权重矩阵，shape为 (n_in, n_out)
-    #     """
-    #     # Xavier初始化
-    #     xavier_stddev = np.sqrt(2.0 / (n_in + n_out))
-    #     W = np.random.normal(0, xavier_stddev, (n_in, n_out))
-    #     # 将对角线元素设置为0
-    #     np.fill_diagonal(W, 0)
-    #     # 对角线元素除以Xavier初始化的标准差，以保持分布不变
-    #     diag_stddev = np.sqrt(2.0 / (n_in + n_out))
-    #     np.fill_diagonal(W, 0)
-    #     W /= diag_stddev
-        
-    #     return W
 
-    
-
+    # Load and preprocess data
     def init_data(self):
-        Ground_Truth = pd.read_csv(self.opt.net_file, header=0)
-        data = sc.read(self.opt.data_file)
-        
-        data = data.transpose()
+        """
+        Load, preprocess scRNA-seq data, and prepare training/evaluation masks.
+        Returns:
+            Preprocessed data and masks for training and evaluation.
+        """
+        # Load ground truth GRN and scRNA-seq data
+        Ground_Truth = pd.read_csv(self.opt.net_file, header=0)  # Gene interaction ground truth
+        data = sc.read(self.opt.data_file)  # Read scRNA-seq data
+        data = data.transpose()  # Transpose to align cells and genes
 
-        gene_name = list(data.var_names)
+        # Normalize and prepare data
+        gene_name = list(data.var_names)  # List of gene names
         data_values = data.X
-        adj = data.X.copy()
-        adj[adj>0]=1
+        adj = data_values.copy()  # Create adjacency matrix
+        adj[adj > 0] = 1  # Binarize the adjacency matrix
         adj = torch.tensor(adj)
-        Dropout_Mask = (data_values != 0).astype(float)
-        data_values = (data_values - data_values.mean(0)) / (data_values.std(0))
+        Dropout_Mask = (data_values != 0).astype(float)  # Create dropout mask
+        data_values = (data_values - data_values.mean(0)) / (data_values.std(0))  # Normalize expression data
         data = pd.DataFrame(data_values, index=list(data.obs_names), columns=gene_name)
-        TF = set(Ground_Truth['Gene1'])
-        All_gene = set(Ground_Truth['Gene1']) | set(Ground_Truth['Gene2'])
+
+        # Create evaluation and TF masks
+        TF = set(Ground_Truth['Gene1'])  # Set of transcription factors (TFs)
+        All_gene = set(Ground_Truth['Gene1']) | set(Ground_Truth['Gene2'])  # All genes in ground truth
         num_genes, num_nodes = data.shape[1], data.shape[0]
         Evaluate_Mask = np.zeros([num_genes, num_genes])
         TF_mask = np.zeros([num_genes, num_genes])
-        for i, item in enumerate(data.columns): #len(set(data.columns)|set(All_gene))=910, len(All_gene)=813
+        for i, item in enumerate(data.columns):
             for j, item2 in enumerate(data.columns):
                 if i == j:
                     continue
                 if item2 in TF and item in All_gene:
-                    Evaluate_Mask[i, j] = 1
+                    Evaluate_Mask[i, j] = 1  # Mark edges for evaluation
                 if item2 in TF:
-                    TF_mask[i, j] = 1
+                    TF_mask[i, j] = 1  # Mark TF-related edges
+
+        # Prepare training data
         feat_train = torch.FloatTensor(data.values)
         train_data = TensorDataset(feat_train, torch.LongTensor(list(range(len(feat_train)))),
-                                   torch.FloatTensor(Dropout_Mask),torch.FloatTensor(adj))
+                                   torch.FloatTensor(Dropout_Mask), torch.FloatTensor(adj))
         dataloader = DataLoader(train_data, batch_size=self.opt.batch_size, shuffle=True, num_workers=8)
+
+        # Prepare ground truth adjacency matrix
         truth_df = pd.DataFrame(np.zeros([num_genes, num_genes]), index=data.columns, columns=data.columns)
         for i in range(Ground_Truth.shape[0]):
             truth_df.loc[Ground_Truth.iloc[i, 1], Ground_Truth.iloc[i, 0]] = 1
         A_truth = truth_df.values
         idx_rec, idx_send = np.where(A_truth)
         truth_edges = set(zip(idx_send, idx_rec))
+
         return dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TF_mask, gene_name, adj
 
+    # Train the GRN inference model
     def train_model(self):
-        opt = self.opt
+        """
+        Train the GRN inference model using a VAE architecture.
+        """
+        # Initialize data and model components
         dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TFmask2, gene_name, adj = self.init_data()
-        adj_A_init = self.initalize_A(data)
-        #adj_A_init = self.xavier_init_with_zero_diag(num_genes,num_genes)
-        bactchsize = opt.batch_size
-        vae = VAE_EAD(adj_A_init, bactchsize, 1, opt.n_hidden, opt.K, opt.dropout, opt.heads, 0.2).float().cuda()
-        #查看optimizer，以及区别，以及scheduler
-        #和DAG不一样
-        #optimizer = optim.RMSprop(vae.parameters(), lr=opt.lr)
-        #optimizer2 = optim.Adam([vae.adj_A], lr=opt.lr * 0.2)#why
+        adj_A_init = self.initalize_A(data)  # Initialize adjacency matrix
+        vae = VAE_EAD(adj_A_init, self.opt.batch_size, 1, self.opt.n_hidden, self.opt.K, self.opt.dropout, 
+                      self.opt.heads, 0.2).float().cuda()
+
+        # Optimizers and schedulers
         optimizer = optim.RMSprop(vae.parameters(), lr=self.opt.lr)
-        optimizer2 = optim.RMSprop([vae.adj_A], lr=self.opt.lr * 0.2)#这是什么操作
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opt.lr_step_size, gamma=opt.gamma)
-        best_Epr = 0
-        vae.train()
-        print(next(vae.parameters()).is_cuda)#False
-        lossData=[[]]
-        patience = 20
-        counter = 0
-        start_time = time.time()
-        for epoch in range(opt.n_epochs + 1):
-            data_embedding = torch.tensor([]).cuda()
-            loss_all, mse_rec, loss_klmlp, data_ids, loss_klgcn, loss_sparse = [], [], [], [], [], []
-            if epoch % (opt.K1 + opt.K2) < opt.K1:
+        optimizer2 = optim.RMSprop([vae.adj_A], lr=self.opt.lr * 0.2)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.opt.lr_step_size, gamma=self.opt.gamma)
+
+        # Training loop
+        best_Epr, patience, counter = 0, 20, 0
+        for epoch in range(self.opt.n_epochs + 1):
+            # Update adjacency matrix and optimize VAE
+            if epoch % (self.opt.K1 + self.opt.K2) < self.opt.K1:
                 vae.adj_A.requires_grad = False
             else:
                 vae.adj_A.requires_grad = True
-            for i, data_batch in enumerate(dataloader, 0):
-                
-
-                if len(data_batch[0]) == opt.batch_size:
-
-                    optimizer.zero_grad()
-                    inputs, data_id, dropout_mask,adj = data_batch
-                    inputs = Variable(inputs.type(Tensor))
-                    data_ids.append(data_id.cpu().detach().numpy())
-                    temperature = max(0.95 ** epoch, 0.5)
-                    adj = normalize_sparse_hypergraph_symmetric(csc_matrix(adj.t()))
-                    
-                    latent_z, loss_rec, loss_kl, loss_kl2, latent_2 = vae(inputs, adj, dropout_mask=None,
-                                                                            temperature=temperature, opt=opt)
-                    
-                    # if epoch > 20:
-                    #data_embedding = torch.cat((data_embedding, latent_z), dim=0)
-
-                    #sparse loss和dag不一样
-                    sparse_loss = torch.mean(torch.abs(vae.adj_A))
-                    #sparse_loss = torch.mean(torch.abs(gcnadj))
-
-                    lossback = loss_rec + loss_kl*opt.beta + loss_kl2*opt.omega + opt.alpha*sparse_loss
-                    
-                    lossback.backward()
-                    mse_rec.append(loss_rec.item())
-                    loss_all.append(lossback.item())
-                    loss_klmlp.append(loss_kl.item())
-                    loss_klgcn.append(loss_kl2.item())
-                    loss_sparse.append(sparse_loss.item())
-                    if epoch % (opt.K1 + opt.K2) < opt.K1:
-                        optimizer.step()
-                    else:
-                        optimizer2.step()
-
-                    
-            
+            # Train the model using batches
+            for data_batch in dataloader:
+                optimizer.zero_grad()
+                # Data processing and loss computation
+                inputs, _, dropout_mask, adj = data_batch
+                inputs = Variable(inputs.type(Tensor))
+                adj = normalize_sparse_hypergraph_symmetric(csc_matrix(adj.t()))
+                latent_z, loss_rec, loss_kl, loss_kl2, _ = vae(inputs, adj, dropout_mask=None,
+                                                                temperature=max(0.95 ** epoch, 0.5), opt=self.opt)
+                sparse_loss = torch.mean(torch.abs(vae.adj_A))
+                loss = loss_rec + self.opt.beta * loss_kl + self.opt.omega * loss_kl2 + self.opt.alpha * sparse_loss
+                loss.backward()
+                if epoch % (self.opt.K1 + self.opt.K2) < self.opt.K1:
+                    optimizer.step()
+                else:
+                    optimizer2.step()
             scheduler.step()
-            
 
-
-            if epoch % (opt.K1 + opt.K2) >= opt.K1:
-                Ep, Epr,  = evaluate(vae.adj_A.cpu().detach().numpy(), truth_edges, Evaluate_Mask)
-                #Ep2, Epr2 = evaluate(gcnadj.cpu().detach().numpy(), truth_edges, Evaluate_Mask)
-                lossData.append([Epr])
+            # Evaluate the model
+            if epoch % (self.opt.K1 + self.opt.K2) >= self.opt.K1:
+                Ep, Epr = evaluate(vae.adj_A.cpu().detach().numpy(), truth_edges, Evaluate_Mask)
                 if Epr >= best_Epr:
-                    best_Epr = Epr
-                    counter = 0
-                else: 
-                    counter+=1
+                    best_Epr, counter = Epr, 0
+                else:
+                    counter += 1
                     if counter >= patience:
-                        print("No Patience")
+                        print("Early stopping due to no improvement")
                         break
-                    # print("latent: "+str(latentvalue))
-                best_Epr = max(Epr, best_Epr)
-                print('epoch:', epoch, 'Ep:', Ep, 'Epr:', Epr, 'loss:',
-                      np.mean(loss_all), 'mse_loss:', np.mean(mse_rec), 'kl_loss:', np.mean(loss_klmlp), 'klgcn_loss:', np.mean(loss_klgcn),'sparse_loss:',
-                      np.mean(loss_sparse))
 
-
-
-       
-        # data_embedding = pd.DataFrame(data_embedding.cpu().detach().numpy())
-        # data_embedding.to_csv("tempbcell\Test_latent_"+str(opt.dataset_name)+str(opt.n_hidden)+str('_alpha_')+str(opt.nalpha)+str('_beta_')+str(opt.nbeta)+str('_omega_')+str(opt.nomega)+str('_lr_')+str(opt.nlr)+str('_wd_')+str(opt.nlr_step_size)+str('_seed_')+str(opt.seed)+str('_head_')+str(opt.heads)+str('_dropout_')+str(opt.dropoutrate)+str('_batch_')+str(opt.batch_size)+".csv")
-   
+        # Save results
         extractEdgesFromMatrix(vae.adj_A.cpu().detach().numpy(), gene_name, TFmask2).to_csv(
-            opt.dataset_name + '/GRN_inference_link_'+str(opt.dataset_name)+str(opt.n_hidden)+str('_alpha_')+str(opt.nalpha)+str('_beta_')+str(opt.nbeta)+str('_omega_')+str(opt.nomega)+str('_lr_')+str(opt.nlr)+str('_wd_')+str(opt.nlr_step_size)+str('_seed_')+str(opt.seed)+str('_head_')+str(opt.heads)+str('_dropout_')+str(opt.dropoutrate)+".tsv", sep='\t', index=False)
-        # pd.DataFrame(latentvalue.cpu().detach().numpy()).to_csv('temp\GRN_latent.csv')
-
-        data_write_csv(opt.dataset_name+'/GRN_inference_result_'+str(opt.dataset_name)+str(opt.n_hidden)+str('_alpha_')+str(opt.nalpha)+str('_beta_')+str(opt.nbeta)+str('_omega_')+str(opt.nomega)+str('_lr_')+str(opt.nlr)+str('_wd_')+str(opt.nlr_step_size)+str('_seed_')+str(opt.seed)+str('_head_')+str(opt.heads)+str('_dropout_')+str(opt.dropoutrate)+".csv", lossData)
+            f"{self.opt.dataset_name}/GRN_inference_link.tsv", sep='\t', index=False)
+        data_write_csv(f"{self.opt.dataset_name}/GRN_inference_result.csv", lossData)
