@@ -48,3 +48,4 @@ Hyperparameters tuned in the paper can be found in the Supplementary.
 * scRNA-seq data with clustering label annotation preprocess tutorial can be found ["here"](https://github.com/hemberg-lab/scRNA.seq.datasets).
 * GRN networks are drawn by Cytoscape.
 
+Cite the code: [![DOI](https://zenodo.org/badge/764355084.svg)](https://doi.org/10.5281/zenodo.15028720)
